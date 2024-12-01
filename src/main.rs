@@ -2,8 +2,10 @@
 
 use serde::{Serialize, Deserialize};
 use serde_json;
-use std::io::{Write, stdin, stdout};
-use std::fs;
+use std::io::{stdin, stdout, Read, Write};
+use std::fs::{self, OpenOptions};
+use std::num::ParseIntError;
+
 
 static mut ID: i32 = 100;
 
@@ -17,9 +19,7 @@ enum Status {
     Pending, Done
 }
 
-
-#[derive(Debug)]
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 struct Todo {
     id: i32,
     status: Status,
@@ -30,9 +30,7 @@ struct Todo {
 fn main() {
 
     let mut to_do_list: Vec<Todo> = Vec::new();
-    let json_file = fs::File::open("todo.json").unwrap();
-    serde_json::to_string(&mut to_do_list);
-    let mut action = String::new();
+    
 
     'myloop: loop {
     println!("\n\n::.::... Coral To-Do List Actions ...::.::");
@@ -43,15 +41,13 @@ fn main() {
     println!("\t5. Display pending todos.");
     println!("\t0. Quit to-do.");
 
-    print!("\nEnter action :..: ");
-    stdout().flush().unwrap();
-    stdin().read_line(&mut action).unwrap();
-    let action = action.trim().parse::<u8>().unwrap();
+    let action = get_input().unwrap();
 
     match action {
         1 => {
-            let add_new = get_new_todo();
-            to_do_list.push(add_new);
+            let new = get_new_todo();
+            to_do_list.push(new);
+            println!("\n _____ todo added _____\n");
         },
         2 => {
             loop{
@@ -87,12 +83,21 @@ fn main() {
             }
         }
         }
-        5 => print_all_todos(&to_do_list),
+        5 => get_and_print_all_todos(),
         0 => break 'myloop,
         other => println!("{other} is not a valid action. Try again.")
     }
 }
 
+}
+
+fn get_input() -> Result<i32, ParseIntError> {
+    let mut action = String::new();
+    print!("\nEnter action :...: ");
+    stdout().flush().unwrap();
+    stdin().read_line(&mut action).unwrap();
+    let action = action.trim().parse::<i32>();
+    action
 }
 
 fn get_new_todo() -> Todo {
@@ -119,7 +124,7 @@ fn get_new_todo() -> Todo {
     print!("Enter time stamp in 24hr format: ");
     stdout().flush().unwrap();
     stdin().read_line(&mut time_stamp).unwrap();
-    let time_stamp: u32 = time_stamp.trim().parse::<u32>().unwrap();
+    let time_stamp= time_stamp.trim().parse::<u32>().unwrap();
 
     if time_stamp < 100 || time_stamp > 2359 {
         println!("Time must be in range 100-2359");
@@ -127,20 +132,39 @@ fn get_new_todo() -> Todo {
         break;
     }
     }
-    Todo {
+    let new = Todo {
         id: unsafe {ID + 1},
         status: Status::Pending,
         description: describe,
         priority: priority,
         timestamp: time_stamp
-    }
+    };
+{
+    // Serialize the new todo and store the string in a json file
+    let mut json_string = serde_json::to_string(&new).unwrap();
+    json_string.push_str("\n");
+    // let mut file = File::open("todo.json").unwrap();
+    let mut file = OpenOptions::new().append(true).open("todo.json").unwrap();
+    // file.write_all(json_string.as_bytes()).unwrap();
+    
+    // let reader = BufReader::new(file);
+    file.write(json_string.as_bytes()).unwrap();
+}
+    new
 
 }
 
-fn print_all_todos(v: &[Todo]) {
-
+fn get_and_print_all_todos() {
+/* 
     println!("Here are all the pending todos");
-    println!("\t{:#?}", v);   
+    println!("\t{:#?}", v);
+*/
+    let mut contents = String::new();
+    let mut file = fs::OpenOptions::new().read(true).open("todo.json").unwrap();
+    fs::File::read_to_string(&mut file, &mut contents).unwrap();
+    let deser = serde_json::from_str::<Todo>(&contents).unwrap();
+    println!("\n*-.._*_.. HISTORY .._*_..-*");
+    println!("{:#?}", deser);
 }
 
 fn mark_task_as_done(v: &mut [Todo], id: i32) {
@@ -151,10 +175,10 @@ fn mark_task_as_done(v: &mut [Todo], id: i32) {
     }
 }
 
-fn remove_one_todo(v: &mut Vec<Todo>, Id: i32) {
+fn remove_one_todo(v: &mut Vec<Todo>, id: i32) {
     for i in 0..v.len() {
-        if v[i].id == Id {
-            v.remove(Id as usize);
+        if v[i].id == id {
+            v.remove(id as usize);
         }
     }
 }
